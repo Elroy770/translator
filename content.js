@@ -1,15 +1,13 @@
 console.log("Hover Translator Loaded");
 
-let hoverHost = null; // We'll store the shadow host here
+let hoverHost = null;
 let timeoutId;
 
 document.addEventListener("mouseup", async (e) => {
   const text = window.getSelection().toString().trim();
   if (!text) return;
 
-  // If we click inside our own shadow dom (not easy to detect from outside without composed path)
-  // but usually user clicks elsewhere to clear.
-  // For now, let's just clear previous if any.
+  // Clear previous if any
   if (hoverHost) {
     hoverHost.remove();
     hoverHost = null;
@@ -17,57 +15,47 @@ document.addEventListener("mouseup", async (e) => {
   clearTimeout(timeoutId);
 
   try {
-    // 1. Get Settings
-    const storage = await chrome.storage.sync.get("targetLang");
-    const tl = storage.targetLang || "he";
+    // SEND MESSAGE TO BACKGROUND instead of fetching here
+    // This is much safer against CORS/CSP blockages
+    chrome.runtime.sendMessage({ type: "TRANSLATE", text: text }, (response) => {
+      // Handle connection error (e.g. context invalidated)
+      if (chrome.runtime.lastError) {
+        console.error("Runtime Error:", chrome.runtime.lastError);
+        if (chrome.runtime.lastError.message.includes("Extension context invalidated")) {
+          alert("Please refresh this page to allow the updated extension to run.");
+        }
+        return;
+      }
 
-    // 2. Fetch Translation
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
-    const data = await res.json();
-
-    let translated = "";
-    if (data?.[0]) {
-      data[0].forEach(seg => {
-        if (seg?.[0]) translated += seg[0];
-      });
-    }
-
-    if (!translated) return;
-
-    // 3. Show UI (Shadow DOM)
-    showHoverResult(translated, e.pageX, e.pageY);
+      if (response) {
+        if (response.startsWith("Error:")) {
+          showHoverResult(response, e.pageX, e.pageY, true);
+        } else {
+          showHoverResult(response, e.pageX, e.pageY, false);
+        }
+      }
+    });
 
   } catch (err) {
-    console.error("Translate error:", err);
+    console.error("Content Script Error:", err);
   }
 });
 
-function showHoverResult(text, x, y) {
+function showHoverResult(text, x, y, isError) {
   if (hoverHost) hoverHost.remove();
 
-  // Create Host
   hoverHost = document.createElement("div");
   hoverHost.id = "hover-translator-host";
   Object.assign(hoverHost.style, {
-    position: "absolute",
-    top: "0",
-    left: "0",
-    width: "100%",
-    height: "100%",
-    zIndex: "2147483647",
-    pointerEvents: "none"
+    position: "absolute", top: "0", left: "0", width: "100%", height: "100%",
+    zIndex: "2147483647", pointerEvents: "none"
   });
   document.body.appendChild(hoverHost);
 
-  // Create Shadow
   const shadow = hoverHost.attachShadow({ mode: "open" });
-
-  // Styles
   const style = document.createElement("style");
+  // Native fonts only
   style.textContent = `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        
         .card {
             position: absolute;
             background: rgba(20, 20, 25, 0.95);
@@ -78,7 +66,7 @@ function showHoverResult(text, x, y) {
             padding: 16px;
             color: #fff;
             box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             max-width: 300px;
             opacity: 0;
             transform: translateY(10px);
@@ -87,49 +75,31 @@ function showHoverResult(text, x, y) {
             font-size: 14px;
             line-height: 1.5;
         }
-        
-        .card.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        .card.visible { opacity: 1; transform: translateY(0); }
+        .card.error { border-color: #ff4444; background: rgba(50, 10, 10, 0.95); }
     `;
   shadow.appendChild(style);
 
-  // Content
   const card = document.createElement("div");
-  card.className = "card";
+  card.className = "card" + (isError ? " error" : "");
   card.textContent = text;
 
-  // Positioning logic (keep roughly near mouse but onscreen)
-  // We render logic in JS to keep it simple
-  style.textContent += `
-        .card {
-            top: ${y + 15}px;
-            left: ${x}px;
-        }
-    `;
+  // Position
+  style.textContent += `.card { top: ${y + 15}px; left: ${x}px; }`;
 
   shadow.appendChild(card);
-
-  // Animate
   requestAnimationFrame(() => card.classList.add("visible"));
 
   // Auto-remove
   timeoutId = setTimeout(() => {
     if (hoverHost) {
       card.classList.remove("visible");
-      setTimeout(() => {
-        if (hoverHost) hoverHost.remove();
-        hoverHost = null;
-      }, 200);
+      setTimeout(() => { if (hoverHost) hoverHost.remove(); hoverHost = null; }, 200);
     }
-  }, 4000); // 4 seconds
+  }, 4000);
 
-  // Stop removal on hover
   card.addEventListener("mouseenter", () => clearTimeout(timeoutId));
   card.addEventListener("mouseleave", () => {
-    timeoutId = setTimeout(() => {
-      if (hoverHost) hoverHost.remove();
-    }, 3000);
+    timeoutId = setTimeout(() => { if (hoverHost) hoverHost.remove(); }, 3000);
   });
 }

@@ -7,13 +7,32 @@ chrome.runtime.onInstalled.addListener(() => {
     });
 });
 
+// Context Menu Listener
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === "translate-selection" && info.selectionText) {
-        handleTranslation(info.selectionText, tab.id);
+        // We use the same service, but inject the result directly
+        performTranslation(info.selectionText).then(translated => {
+            if (translated) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: showTranslationResult,
+                    args: [translated]
+                });
+            }
+        });
     }
 });
 
-async function handleTranslation(text, tabId) {
+// Message Listener (For Content Script)
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === "TRANSLATE" && request.text) {
+        performTranslation(request.text).then(sendResponse);
+        return true; // Keep channel open for async response
+    }
+});
+
+// Centralized Translation Logic
+async function performTranslation(text) {
     try {
         const data = await chrome.storage.sync.get("targetLang");
         const tl = data.targetLang || "he";
@@ -28,46 +47,30 @@ async function handleTranslation(text, tabId) {
                 if (seg && seg[0]) translated += seg[0];
             });
         }
-
-        if (translated) {
-            chrome.scripting.executeScript({
-                target: { tabId: tabId },
-                func: showTranslationResult,
-                args: [translated]
-            });
-        }
+        return translated;
     } catch (err) {
         console.error("Translation failed:", err);
+        return `Error: ${err.message}`; // Return error to caller
     }
 }
 
+// Result UI (Injected via Scripting)
 function showTranslationResult(text) {
-    // 1. Clean up existing
-    const existingHost = document.getElementById("hover-translator-host");
+    const existingHost = document.getElementById("ctx-translator-host");
     if (existingHost) existingHost.remove();
 
-    // 2. Create Shadow Host
     const host = document.createElement("div");
-    host.id = "hover-translator-host";
+    host.id = "ctx-translator-host";
     Object.assign(host.style, {
-        position: "fixed",
-        top: "0",
-        left: "0",
-        width: "0",
-        height: "0",
-        zIndex: "2147483647", // Max z-index
-        pointerEvents: "none" // Allow clicks through the empty host
+        position: "fixed", top: "0", left: "0", width: "0", height: "0",
+        zIndex: "2147483647", pointerEvents: "none"
     });
     document.body.appendChild(host);
 
-    // 3. Create Shadow Root
     const shadow = host.attachShadow({ mode: "open" });
-
-    // 4. Styles (Isolated)
     const style = document.createElement("style");
+    // Removed external @import to prevent CSP blocking
     style.textContent = `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        
         .container {
             position: fixed;
             top: 20px;
@@ -75,17 +78,15 @@ function showTranslationResult(text) {
             transform: translateX(-50%) translateY(-20px);
             min-width: 320px;
             max-width: 600px;
-            background: rgba(20, 20, 25, 0.95); /* Dark premium theme */
+            background: rgba(20, 20, 25, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
             padding: 24px;
             color: #fff;
-            box-shadow: 
-                0 20px 40px rgba(0,0,0,0.3),
-                0 0 0 1px rgba(255,255,255,0.05);
-            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             opacity: 0;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: auto;
@@ -93,69 +94,18 @@ function showTranslationResult(text) {
             flex-direction: column;
             gap: 12px;
         }
-
-        .container.visible {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .title {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #9ca3af;
-            font-weight: 600;
-        }
-
-        .content {
-            font-size: 16px;
-            line-height: 1.6;
-            color: #f3f4f6;
-            font-weight: 400;
-        }
-
-        .footer {
-            margin-top: 8px;
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: #6b7280;
-            cursor: pointer;
-            padding: 4px;
-            border-radius: 4px;
-            transition: color 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .close-btn:hover {
-            color: #fff;
-            background: rgba(255,255,255,0.1);
-        }
-        
-        svg {
-            width: 20px;
-            height: 20px;
-        }
+        .container.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; font-weight: 600; }
+        .content { font-size: 16px; line-height: 1.6; color: #f3f4f6; }
+        .close-btn { background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.2s; display: flex; align-items: center; justify-content: center; }
+        .close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        svg { width: 20px; height: 20px; }
     `;
     shadow.appendChild(style);
 
-    // 5. Structure
     const container = document.createElement("div");
     container.className = "container";
-
     container.innerHTML = `
         <div class="header">
             <span class="title">Translation</span>
@@ -165,10 +115,8 @@ function showTranslationResult(text) {
         </div>
         <div class="content">${text}</div>
     `;
-
     shadow.appendChild(container);
 
-    // 6. Logic
     requestAnimationFrame(() => container.classList.add("visible"));
 
     const close = () => {
@@ -178,12 +126,7 @@ function showTranslationResult(text) {
     };
 
     container.querySelector("#close").onclick = close;
-
-    // Auto close logic
-    let timer;
-    const startTimer = () => { timer = setTimeout(close, 6000); };
-    startTimer();
-
+    let timer = setTimeout(close, 6000);
     container.onmouseenter = () => clearTimeout(timer);
-    container.onmouseleave = startTimer;
+    container.onmouseleave = () => timer = setTimeout(close, 6000);
 }
