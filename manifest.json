@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Hover Translator EN→HE",
+  "version": "0.1",
+  "permissions": [
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_icon": "icon.png",
+    "default_title": "Hover Translator EN→HE",
+    "default_popup": "popup.html"
+  }
+}

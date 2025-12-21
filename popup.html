@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            width: 250px;
+            font-family: sans-serif;
+            padding: 10px;
+            margin: 0;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        #languages {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
+
+        li {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        li:hover {
+            background-color: #f0f0f0;
+        }
+
+        li.selected {
+            background-color: #e0f7fa;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <input type="text" id="search" placeholder="Search language...">
+    <ul id="languages"></ul>
+    <script src="popup.js"></script>
+</body>
+
+</html>
