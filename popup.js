@@ -21,14 +21,22 @@ function renderList(items, selectedCode) {
             // Scroll to selected item if possible
             setTimeout(() => li.scrollIntoView({ block: "center" }), 0);
         }
-
         li.addEventListener("click", () => {
             chrome.storage.sync.set({ targetLang: lang.code }, () => {
-                // Update UI selection
-                document.querySelectorAll("li").forEach(el => el.classList.remove("selected"));
-                li.classList.add("selected");
+                renderList(items, lang.code);
             });
         });
+
+        if (lang.code === selectedCode) {
+            const checkmark = document.createElement("span");
+            checkmark.textContent = "\u2705";
+            checkmark.style.color = "green";
+            checkmark.style.marginLeft = "auto";
+            li.style.display = "flex";
+            li.style.justifyContent = "space-between";
+            li.style.alignItems = "center";
+            li.appendChild(checkmark);
+        }
 
         langList.appendChild(li);
     });

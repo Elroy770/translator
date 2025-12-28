@@ -1,7 +1,6 @@
 console.log("Hover Translator Loaded");
 
 let hoverHost = null;
-let timeoutId;
 
 document.addEventListener("mouseup", async (e) => {
   const text = window.getSelection().toString().trim();
@@ -12,7 +11,6 @@ document.addEventListener("mouseup", async (e) => {
     hoverHost.remove();
     hoverHost = null;
   }
-  clearTimeout(timeoutId);
 
   try {
     // SEND MESSAGE TO BACKGROUND instead of fetching here
@@ -90,16 +88,17 @@ function showHoverResult(text, x, y, isError) {
   shadow.appendChild(card);
   requestAnimationFrame(() => card.classList.add("visible"));
 
-  // Auto-remove
-  timeoutId = setTimeout(() => {
+  // Remove on any click
+  const removeHover = () => {
     if (hoverHost) {
       card.classList.remove("visible");
       setTimeout(() => { if (hoverHost) hoverHost.remove(); hoverHost = null; }, 200);
     }
-  }, 4000);
+    document.removeEventListener("click", removeHover);
+  };
 
-  card.addEventListener("mouseenter", () => clearTimeout(timeoutId));
-  card.addEventListener("mouseleave", () => {
-    timeoutId = setTimeout(() => { if (hoverHost) hoverHost.remove(); }, 3000);
-  });
+  // Add listener after a short delay to avoid immediate removal from the selection click
+  setTimeout(() => {
+    document.addEventListener("click", removeHover);
+  }, 100);
 }
