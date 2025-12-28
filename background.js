@@ -43,7 +43,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "TRANSLATE" && request.text) {
         // Check if extension is enabled
-        chrome.storage.sync.get("extensionEnabled", ({ extensionEnabled }) => {
+        chrome.storage.sync.get("extensionEnabled", async ({ extensionEnabled }) => {
             const isEnabled = extensionEnabled !== undefined ? extensionEnabled : true;
             
             if (!isEnabled) {
@@ -52,7 +52,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 return;
             }
             
-            performTranslation(request.text).then(sendResponse);
+            const result = await performTranslation(request.text);
+            sendResponse(result);
         });
         return true; // Keep channel open for async response
     }
