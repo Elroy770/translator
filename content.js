@@ -94,6 +94,15 @@ function showHoverResult(text, x, y, isError, originalText) {
 
   const shadow = hoverHost.attachShadow({ mode: "open" });
 
+  // Check pronunciation setting
+  chrome.storage.sync.get("pronunciationEnabled", ({ pronunciationEnabled }) => {
+    const isPronunciationEnabled = pronunciationEnabled !== undefined ? pronunciationEnabled : true;
+    renderPopup(shadow, text, x, y, isError, originalText, isPronunciationEnabled);
+  });
+}
+
+function renderPopup(shadow, text, x, y, isError, originalText, isPronunciationEnabled) {
+
   /* =========================
      Styles
   ========================= */
@@ -189,8 +198,8 @@ function showHoverResult(text, x, y, isError, originalText) {
   content.textContent = text;
   header.appendChild(content);
 
-  // Add speaker button only if we have original text and it's not an error
-  if (originalText && !isError) {
+  // Add speaker button only if we have original text, it's not an error, and pronunciation is enabled
+  if (originalText && !isError && isPronunciationEnabled) {
     const speakerBtn = document.createElement("button");
     speakerBtn.className = "speaker-btn";
     speakerBtn.innerHTML = `

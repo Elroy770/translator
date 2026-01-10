@@ -18,7 +18,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === "translate-selection" && info.selectionText) {
         // Check if extension is enabled
-        const { extensionEnabled } = await chrome.storage.sync.get("extensionEnabled");
+        const { extensionEnabled, pronunciationEnabled } = await chrome.storage.sync.get(["extensionEnabled", "pronunciationEnabled"]);
         const isEnabled = extensionEnabled !== undefined ? extensionEnabled : true;
         
         if (!isEnabled) {
@@ -26,13 +26,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             return;
         }
         
+        const isPronunciationEnabled = pronunciationEnabled !== undefined ? pronunciationEnabled : true;
+        
         // We use the same service, but inject the result directly
         performTranslation(info.selectionText).then(translated => {
             if (translated) {
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id },
                     func: showTranslationResult,
-                    args: [translated, info.selectionText]
+                    args: [translated, info.selectionText, isPronunciationEnabled]
                 });
             }
         });
@@ -83,7 +85,7 @@ async function performTranslation(text) {
 }
 
 // Result UI (Injected via Scripting)
-function showTranslationResult(text, originalText) {
+function showTranslationResult(text, originalText, isPronunciationEnabled) {
     const existingHost = document.getElementById("ctx-translator-host");
     if (existingHost) existingHost.remove();
 
@@ -139,7 +141,7 @@ function showTranslationResult(text, originalText) {
     container.className = "container";
     
     let speakerButtonHtml = '';
-    if (originalText && !text.startsWith("Error:")) {
+    if (originalText && !text.startsWith("Error:") && isPronunciationEnabled) {
         speakerButtonHtml = `
             <button class="speaker-btn" id="speaker">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
